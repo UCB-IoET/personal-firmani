@@ -26,7 +26,7 @@ print("node id", storm.os.nodeid())
 
 -- create echo server as handler
 server = function()
-   sock = storm.net.udpsocket(7, 
+   sock = storm.net.udpsocket(17, 
 			      function(payload, from, port)
 				 brd:flash(1)
 				 print (string.format("from %s port %d: %s",from,port,payload))
