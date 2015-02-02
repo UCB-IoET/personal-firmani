@@ -1,3 +1,4 @@
+
 --[[
    echo client as server
    currently set up so you should start one or another functionality at the
@@ -59,7 +60,7 @@ client = function()
    local msg = string.format("0x%04x says count=%d", storm.os.nodeid(), count)
    print("send:", msg)
    -- send upd echo to link local all nodes multicast
-   storm.net.sendto(csock, msg, "ff02::1", 7) 
+   storm.net.sendto(csock, msg, "ff02::1",17) 
    count = count + 1
    grn:flash(1)
 end
