@@ -51,6 +51,7 @@ end
 			end)
 	end
 
+
 	function Server:invoke(m, service, value)
 		local service_invoke = {service, {value}}
 		local msg = storm.mp.pack(service_invoke)
@@ -154,17 +155,21 @@ function run_service_print()
 	end)
 end
 s = Server:new{port = PUBLISH_PORT, listening_port = INVOKER_PORT}
--- c = Client:new{port = INVOKER_PORT}
 
 function init()
 	s:init()
+	
+	-- PUBLISHING CODE
 	s:begin_publish()
 
-	id = "ApplesandBananas"
-	if services_heard[id] then
-		c:invoke(services_heard[id], "setRlyA", 1)
+	-- INVOKING CODE
+	-- id = "ApplesandBananas"
+	-- if services_heard[id] then
+	-- 	storm.os.invokePeriodically(5 * storm.os.SECOND, function()
+	-- 		s:invoke(services_heard[id], "setRlyA", 1)
+	-- 	end
 
-	-- c:init()
+
 	run_service_print()
 	run_cleaning_service()
 	cord.enter_loop()
