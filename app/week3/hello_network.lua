@@ -1,30 +1,12 @@
 require "cord" 
+LED = require("led")
 
 local INVOKER_PORT = 1526
-local LISTENER_PORT = 1525
+local PUBLISH_PORT = 1525
 local CLEANING_THRESHOLD = 100000
 local CLEANING_PERIOD = 5 * storm.os.SECOND
 
-Client = {}
-function Client:new()
-	o = o or {}
-	setmetatable(o,  self)
-	self.__index = self
-	self:init()
-	return o
-end
-	function Client:init()
-		sock = storm.net.udpsocket(INVOKER_PORT, 
-				      function(payload, from, port)
-				      	-- RESPONSE FROM SENDING COMMAND
-				      end)
-	end
-	-- m is the manifest of the service being invocked
-	function Client:invoke(self, m, service, value)
-		local service_invoke = {name,{value}}
-		local msg = storm.mp.pack(service_invoke)
-		storm.net.sendto(self.sock, msg, m.from, m.port)
-	end
+
 
 
 local svc_manifest = { 
@@ -49,19 +31,31 @@ end
 
 function Server:init()
 	print("\nSTARTING SERVER ON", self.port)
-	self.sock = storm.net.udpsocket(self.port, 
+	self.publishing_socket = storm.net.udpsocket(self.port, 
 				function(payload, from, port)
 						print("Getting msg from", from, port)
 						route_messages(payload, from, port)
 				end)
+	self.invoking_socket = storm.net.udpsocket(self.listening_port, 
+				function(payload, from, port)
+					print("Getting invocation from", from, port)
+					route_messages(payload, from, port)
+				end)
 end
 	function Server:begin_publish()
-		
 		local msg = storm.mp.pack(svc_manifest)
 		storm.os.invokePeriodically(5 * storm.os.SECOND, function()
-				print("Publishing manifest to", self.port, self.sock)
-				storm.net.sendto(self.sock, msg, "ff02::1", self.port)
+				print("Publishing manifest to", self.port, self.publishing_socket)
+				-- MULTICAST THAT
+				storm.net.sendto(self.publishing_socket, msg, "ff02::1", self.port)
 			end)
+	end
+
+	function Server:invoke(m, service, value)
+		local service_invoke = {service, {value}}
+		local msg = storm.mp.pack(service_invoke)
+		-- UNICAST THAT
+		storm.net.sendto(self.invoking_socket, msg, m.from, m.port)
 	end
 
 
@@ -100,12 +94,20 @@ end
 		end
 	end
 
+
+	local blue_led = LED:new("D2")
+	local green_led = LED:new("D3")
+	local red_led = LED:new("D4")
+	local red2_led = LED:new("D5")
 	-- 
 	function handle_service(service, params)
 		if service == "setRlyA" then
 			print("Turning on the RED LED")
+			red_led:on()
+			red_led2:on()
 	   	elseif service == "setRlyB" then
 	      	print("Turning on the Blue LED")
+	      	blue_led:on()
 		end
 	end
 
@@ -151,12 +153,17 @@ function run_service_print()
 		print("\n------------------------")
 	end)
 end
-s = Server:new{port = LISTENER_PORT}
+s = Server:new{port = PUBLISH_PORT, listening_port = INVOKER_PORT}
 -- c = Client:new{port = INVOKER_PORT}
 
 function init()
 	s:init()
 	s:begin_publish()
+
+	id = "ApplesandBananas"
+	if services_heard[id] then
+		c:invoke(services_heard[id], "setRlyA", 1)
+
 	-- c:init()
 	run_service_print()
 	run_cleaning_service()
