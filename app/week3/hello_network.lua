@@ -19,12 +19,23 @@ end
 				      	-- RESPONSE FROM SENDING COMMAND
 				      end)
 	end
-
+	-- m is the manifest of the service being invocked
 	function Client:invoke(self, m, service, value)
 		local service_invoke = {name,{value}}
 		local msg = storm.mp.pack(service_invoke)
 		storm.net.sendto(self.sock, msg, m.from, m.port)
 	end
+
+
+local svc_manifest = { 
+			id="ApplesandBananas",
+			setRlyA={ s="setBool", desc= "red LED" },
+			setRlyB={ s="setBool", desc= "green LED" },
+			setRlyC={ s="setBool", desc= "blue LED" },
+			getTime={ s="", desc="get my time"}
+	   }
+
+
 
 services_heard = {}
 
@@ -37,24 +48,18 @@ function Server:new(o)
 end
 
 function Server:init()
-	print("STARTING SERVER ON", self.port)
+	print("\nSTARTING SERVER ON", self.port)
 	self.sock = storm.net.udpsocket(self.port, 
 				function(payload, from, port)
+						print("Getting msg from", from, port)
 						route_messages(payload, from, port)
 				end)
 end
 	function Server:begin_publish()
-		local svc_manifest = { 
-			id="ApplesandBananas",
-			setRlyA={ s="setBool", desc= "red LED" },
-			setRlyB={ s="setBool", desc= "green LED" },
-			setRlyC={ s="setBool", desc= "blue LED" },
-			getTime={ s="", desc="get my time"}
-	   }
-		local msg = storm.mp.pack(svc_manifest)
 		
+		local msg = storm.mp.pack(svc_manifest)
 		storm.os.invokePeriodically(5 * storm.os.SECOND, function()
-				print("Publishing manifest to", self.port)
+				print("Publishing manifest to", self.port, self.sock)
 				storm.net.sendto(self.sock, msg, "ff02::1", self.port)
 			end)
 	end
@@ -72,7 +77,8 @@ end
 	function log_service(m, from, port)
 		local id = m.id
 		if services_heard[id] then
-			services_heard[id].times = storm.os.now(storm.os.SHIFT_0)
+			services_heard[id].last_heard = storm.os.now(storm.os.SHIFT_0)
+			return
 		end
 
 		m.from = from
@@ -87,8 +93,8 @@ end
 	   service = msg[1]
 	   params = msg[2]
 	   -- is a valid service
-		if m[service] then
-			route_service(service, params)
+		if svc_manifest[service] then
+			handle_service(service, params)
 		else
 			print("Invalid service", msg[1])
 		end
@@ -99,7 +105,7 @@ end
 		if service == "setRlyA" then
 			print("Turning on the RED LED")
 	   	elseif service == "setRlyB" then
-	      print("Turning on the Blue LED")
+	      	print("Turning on the Blue LED")
 		end
 	end
 
@@ -134,7 +140,17 @@ function print_manifest(m)
    	end
    end
 end	
-
+function run_service_print()
+	storm.os.invokePeriodically(5 * storm.os.SECOND, function()
+		print("\nCURRENT SERVICES HEARD")
+		for k, v in pairs(services_heard) do
+			for i, j in pairs(v) do
+				print("\t", i .. ":",j,"\n")
+			end
+		end
+		print("\n------------------------")
+	end)
+end
 s = Server:new{port = LISTENER_PORT}
 -- c = Client:new{port = INVOKER_PORT}
 
@@ -142,6 +158,7 @@ function init()
 	s:init()
 	s:begin_publish()
 	-- c:init()
+	run_service_print()
 	run_cleaning_service()
 	cord.enter_loop()
 end
