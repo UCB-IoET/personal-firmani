@@ -1,12 +1,11 @@
 require "cord" 
 
-
-
 local INVOKER_PORT = 1526
 local LISTENER_PORT = 1525
 local CLEANING_THRESHOLD = 100000
 local CLEANING_PERIOD = 5 * storm.os.SECOND
 
+Client = {}
 function Client:new()
 	o = o or {}
 	setmetatable(o,  self)
@@ -18,7 +17,7 @@ end
 		sock = storm.net.udpsocket(INVOKER_PORT, 
 				      function(payload, from, port)
 				      	-- RESPONSE FROM SENDING COMMAND
-				      end), 
+				      end)
 	end
 
 	function Client:invoke(self, m, service, value)
@@ -29,21 +28,38 @@ end
 
 services_heard = {}
 
+Server = {}
 function Server:new(o)
 	o = o or {}
 	setmetatable(o,  self)
 	self.__index = self
-	self:init()
 	return o
 end
 
 function Server:init()
+	print("STARTING SERVER ON", self.port)
 	self.sock = storm.net.udpsocket(self.port, 
 				function(payload, from, port)
 						route_messages(payload, from, port)
 				end)
 end
-	
+	function Server:begin_publish()
+		local svc_manifest = { 
+			id="ApplesandBananas",
+			setRlyA={ s="setBool", desc= "red LED" },
+			setRlyB={ s="setBool", desc= "green LED" },
+			setRlyC={ s="setBool", desc= "blue LED" },
+			getTime={ s="", desc="get my time"}
+	   }
+		local msg = storm.mp.pack(svc_manifest)
+		
+		storm.os.invokePeriodically(5 * storm.os.SECOND, function()
+				print("Publishing manifest to", self.port)
+				storm.net.sendto(self.sock, msg, "ff02::1", self.port)
+			end)
+	end
+
+
 	function route_messages(payload, from, port)
 		local msg = storm.mp.unpack(payload)
 		if msg.id then -- service announcement
@@ -91,7 +107,7 @@ end
 -- CLEANING ROUTINE
 function cleaning_service(threshold)
 	print "CLEANING SERVICES"
-	for k, v in pairs(services_heard)
+	for k, v in pairs(services_heard) do
 		if v.last_heard - storm.os.now(storm.os.SHIFT_0) > threshold then
 			print("SO OLD!", k)
 			services_heard[k] = nil
@@ -120,12 +136,14 @@ function print_manifest(m)
 end	
 
 s = Server:new{port = LISTENER_PORT}
-c = Client:new{port = INVOKER_PORT}
+-- c = Client:new{port = INVOKER_PORT}
 
-function init( ... )
+function init()
 	s:init()
-	c:init()
+	s:begin_publish()
+	-- c:init()
 	run_cleaning_service()
 	cord.enter_loop()
 end
 
+init()
